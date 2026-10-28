@@ -1,0 +1,415 @@
+{
+  "entities": {
+    "Article": {
+      "title": "Article",
+      "description": "A news article published or drafted on NaviBihar India (NBI News)",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Hindi or English headline of the news article",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "slug": {
+          "type": "string",
+          "description": "SEO-friendly URL slug for the article",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "description": "Primary news category slug",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "subCategory": {
+          "type": "string",
+          "description": "Optional subcategory such as Bihar Politics or Bihar Education",
+          "maxLength": 100
+        },
+        "city": {
+          "type": "string",
+          "description": "Optional city or district name in Bihar or India",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "description": "Short summary or deck of the article",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "content": {
+          "type": "string",
+          "description": "Full news article body content",
+          "minLength": 1,
+          "maxLength": 50000
+        },
+        "featuredImage": {
+          "type": "string",
+          "description": "URL or path to the featured news image",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "imageCaption": {
+          "type": "string",
+          "description": "Editorial caption for the featured image",
+          "maxLength": 500
+        },
+        "author": {
+          "type": "string",
+          "description": "Display name of the journalist or editorial desk",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "authorId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator who created the article",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "ISO date string for display publication time",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "scheduledFor": {
+          "type": "string",
+          "description": "Optional ISO date string for scheduled publication",
+          "maxLength": 60
+        },
+        "status": {
+          "type": "string",
+          "description": "Publication workflow status",
+          "enum": ["published", "draft", "scheduled"],
+          "maxLength": 20
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Whether the article is highlighted in the homepage hero"
+        },
+        "isBreaking": {
+          "type": "boolean",
+          "description": "Whether the article appears in the breaking news ticker"
+        },
+        "isTrending": {
+          "type": "boolean",
+          "description": "Whether the article appears in the popular/trending list"
+        },
+        "trendingRank": {
+          "type": "number",
+          "description": "Numeric rank for trending news ordering"
+        },
+        "views": {
+          "type": "number",
+          "description": "Article view counter"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "title",
+        "slug",
+        "category",
+        "description",
+        "content",
+        "featuredImage",
+        "author",
+        "authorId",
+        "publishedAt",
+        "status",
+        "isFeatured",
+        "isBreaking",
+        "isTrending",
+        "views",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "News section category configuration",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Hindi display name of the category",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL-safe identifier for the category",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "SEO description for the category page",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "order": {
+          "type": "number",
+          "description": "Navigation display order"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the category is visible in navigation"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp"
+        }
+      },
+      "required": [
+        "name",
+        "slug",
+        "description",
+        "order",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "VideoNews": {
+      "title": "VideoNews",
+      "description": "Video bulletin or short vertical news clip",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Hindi video headline",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "category": {
+          "type": "string",
+          "description": "Category slug for the video",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "Video thumbnail URL",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "Embed or stream URL for the video",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "duration": {
+          "type": "string",
+          "description": "Formatted duration string (e.g. 04:15)",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "isVertical": {
+          "type": "boolean",
+          "description": "True for mobile vertical reel format, false for 16:9"
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "ISO publication timestamp string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "authorId": {
+          "type": "string",
+          "description": "Admin UID who added the video",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "description": "Publication status of the video",
+          "enum": ["published", "draft"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "title",
+        "category",
+        "thumbnailUrl",
+        "videoUrl",
+        "duration",
+        "isVertical",
+        "publishedAt",
+        "authorId",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PortalSettings": {
+      "title": "PortalSettings",
+      "description": "Global homepage, ticker, banner, and social media settings",
+      "type": "object",
+      "properties": {
+        "breakingNewsTicker": {
+          "type": "string",
+          "description": "Breaking news ticker text separated by pipes",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "breakingNewsActive": {
+          "type": "boolean",
+          "description": "Whether the breaking news ticker is visible"
+        },
+        "bannerTitle": {
+          "type": "string",
+          "description": "Optional special announcement banner title",
+          "maxLength": 300
+        },
+        "bannerLink": {
+          "type": "string",
+          "description": "Optional URL for the announcement banner",
+          "maxLength": 500
+        },
+        "bannerActive": {
+          "type": "boolean",
+          "description": "Whether the homepage announcement banner is enabled"
+        },
+        "facebookUrl": {
+          "type": "string",
+          "description": "Official Facebook page link",
+          "maxLength": 500
+        },
+        "instagramUrl": {
+          "type": "string",
+          "description": "Official Instagram profile link",
+          "maxLength": 500
+        },
+        "youtubeUrl": {
+          "type": "string",
+          "description": "Official YouTube channel link",
+          "maxLength": 500
+        },
+        "twitterUrl": {
+          "type": "string",
+          "description": "Official X/Twitter profile link",
+          "maxLength": 500
+        },
+        "whatsappChannelUrl": {
+          "type": "string",
+          "description": "Official WhatsApp channel link",
+          "maxLength": 500
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Editorial contact email",
+          "maxLength": 200
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Editorial desk phone number",
+          "maxLength": 50
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Admin UID who last updated settings",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "breakingNewsTicker",
+        "breakingNewsActive",
+        "bannerTitle",
+        "bannerLink",
+        "bannerActive",
+        "facebookUrl",
+        "instagramUrl",
+        "youtubeUrl",
+        "twitterUrl",
+        "whatsappChannelUrl",
+        "contactEmail",
+        "contactPhone",
+        "updatedBy",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized administrator record",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Verified administrator email address",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "role": {
+          "type": "string",
+          "description": "Administrator role identifier",
+          "enum": ["admin", "editor"],
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin was registered"
+        }
+      },
+      "required": ["email", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/articles/{articleId}": {
+      "schema": { "$ref": "#/entities/Article" },
+      "description": "Stores all news articles. Published articles are publicly readable; draft and scheduled articles are restricted to verified administrators."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Stores news categories. Active categories are publicly readable; only administrators can create, update, or delete."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/VideoNews" },
+      "description": "Stores video news bulletins and vertical shorts. Published videos are publicly readable; drafts are restricted to administrators."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PortalSettings" },
+      "description": "Stores portal-wide configuration (breaking news ticker, social links, homepage banners). Publicly readable; writable only by administrators."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Stores administrator role records keyed by Firebase Auth UID. Readable only by the owner admin or bootstrapped super-admin."
+    }
+  }
+}

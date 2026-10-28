@@ -1,0 +1,6 @@
+{
+  "name": "NaviBihar India (NBI News)",
+  "description": "बिहार और देश की ताज़ा खबरें - NaviBihar India (NBI News) प्रीमियम डिजिटल न्यूज़ पोर्टल। राजनीति, क्राइम, शिक्षा, रोजगार, खेल और मनोरंजन की विश्वसनीय खबरें।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

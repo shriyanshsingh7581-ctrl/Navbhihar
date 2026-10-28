@@ -1,0 +1,293 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return isVerified() && request.auth.token.email == 'singhshriyansh51@gmail.com';
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        isSuperAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Entity Validation Blueprints
+    function isValidArticle(data) {
+      return data.keys().hasAll([
+        'title', 'slug', 'category', 'description', 'content',
+        'featuredImage', 'author', 'authorId', 'publishedAt',
+        'status', 'isFeatured', 'isBreaking', 'isTrending',
+        'views', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'title', 'slug', 'category', 'subCategory', 'city',
+        'description', 'content', 'featuredImage', 'imageCaption',
+        'author', 'authorId', 'publishedAt', 'scheduledFor',
+        'status', 'isFeatured', 'isBreaking', 'isTrending',
+        'trendingRank', 'views', 'createdAt', 'updatedAt'
+      ]) &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+      data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 200 && data.slug.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.category is string && data.category.size() >= 1 && data.category.size() <= 100 &&
+      (!('subCategory' in data) || (data.subCategory is string && data.subCategory.size() <= 100)) &&
+      (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+      data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+      data.content is string && data.content.size() >= 1 && data.content.size() <= 50000 &&
+      data.featuredImage is string && data.featuredImage.size() >= 1 && data.featuredImage.size() <= 2000 &&
+      (!('imageCaption' in data) || (data.imageCaption is string && data.imageCaption.size() <= 500)) &&
+      data.author is string && data.author.size() >= 1 && data.author.size() <= 150 &&
+      data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+      data.publishedAt is string && data.publishedAt.size() >= 1 && data.publishedAt.size() <= 60 &&
+      (!('scheduledFor' in data) || (data.scheduledFor is string && data.scheduledFor.size() <= 60)) &&
+      data.status is string && data.status.size() <= 20 && (data.status == 'published' || data.status == 'draft' || data.status == 'scheduled') &&
+      data.isFeatured is bool &&
+      data.isBreaking is bool &&
+      data.isTrending is bool &&
+      (!('trendingRank' in data) || (data.trendingRank is number && data.trendingRank >= 0 && data.trendingRank <= 1000)) &&
+      data.views is number && data.views >= 0 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll([
+        'name', 'slug', 'description', 'order', 'isActive', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'name', 'slug', 'description', 'order', 'isActive', 'createdAt', 'updatedAt'
+      ]) &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+      data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 100 && data.slug.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.description is string && data.description.size() >= 1 && data.description.size() <= 500 &&
+      data.order is number && data.order >= 0 && data.order <= 1000 &&
+      data.isActive is bool &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidVideo(data) {
+      return data.keys().hasAll([
+        'title', 'category', 'thumbnailUrl', 'videoUrl', 'duration',
+        'isVertical', 'publishedAt', 'authorId', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'title', 'category', 'thumbnailUrl', 'videoUrl', 'duration',
+        'isVertical', 'publishedAt', 'authorId', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+      data.category is string && data.category.size() >= 1 && data.category.size() <= 100 &&
+      data.thumbnailUrl is string && data.thumbnailUrl.size() >= 1 && data.thumbnailUrl.size() <= 2000 &&
+      data.videoUrl is string && data.videoUrl.size() >= 1 && data.videoUrl.size() <= 2000 &&
+      data.duration is string && data.duration.size() >= 1 && data.duration.size() <= 20 &&
+      data.isVertical is bool &&
+      data.publishedAt is string && data.publishedAt.size() >= 1 && data.publishedAt.size() <= 60 &&
+      data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+      data.status is string && data.status.size() <= 20 && (data.status == 'published' || data.status == 'draft') &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll([
+        'breakingNewsTicker', 'breakingNewsActive', 'bannerTitle', 'bannerLink',
+        'bannerActive', 'facebookUrl', 'instagramUrl', 'youtubeUrl',
+        'twitterUrl', 'whatsappChannelUrl', 'contactEmail', 'contactPhone',
+        'updatedBy', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'breakingNewsTicker', 'breakingNewsActive', 'bannerTitle', 'bannerLink',
+        'bannerActive', 'facebookUrl', 'instagramUrl', 'youtubeUrl',
+        'twitterUrl', 'whatsappChannelUrl', 'contactEmail', 'contactPhone',
+        'updatedBy', 'updatedAt'
+      ]) &&
+      data.breakingNewsTicker is string && data.breakingNewsTicker.size() >= 1 && data.breakingNewsTicker.size() <= 1000 &&
+      data.breakingNewsActive is bool &&
+      data.bannerTitle is string && data.bannerTitle.size() <= 300 &&
+      data.bannerLink is string && data.bannerLink.size() <= 500 &&
+      data.bannerActive is bool &&
+      data.facebookUrl is string && data.facebookUrl.size() <= 500 &&
+      data.instagramUrl is string && data.instagramUrl.size() <= 500 &&
+      data.youtubeUrl is string && data.youtubeUrl.size() <= 500 &&
+      data.twitterUrl is string && data.twitterUrl.size() <= 500 &&
+      data.whatsappChannelUrl is string && data.whatsappChannelUrl.size() <= 500 &&
+      data.contactEmail is string && data.contactEmail.size() <= 200 &&
+      data.contactPhone is string && data.contactPhone.size() <= 50 &&
+      data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 && data.updatedBy == request.auth.uid &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt']) &&
+      data.keys().hasOnly(['email', 'role', 'createdAt']) &&
+      data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+      data.role is string && data.role.size() <= 50 && (data.role == 'admin' || data.role == 'editor') &&
+      data.createdAt is timestamp;
+    }
+
+    // Collection: /articles/{articleId}
+    match /articles/{articleId} {
+      allow get: if isValidId(articleId) && (existing().status == 'published' || isAdmin());
+      allow list: if existing().status == 'published' || isAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(articleId) &&
+        isValidArticle(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(articleId) &&
+        isValidArticle(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().authorId == existing().authorId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'slug', 'category', 'subCategory', 'city',
+          'description', 'content', 'featuredImage', 'imageCaption',
+          'author', 'publishedAt', 'scheduledFor', 'status',
+          'isFeatured', 'isBreaking', 'isTrending', 'trendingRank',
+          'views', 'updatedAt'
+        ]) &&
+        isAdmin();
+
+      allow delete: if isVerified() && isValidId(articleId) && isAdmin();
+    }
+
+    // Collection: /categories/{categoryId}
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(categoryId) &&
+        isValidCategory(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(categoryId) &&
+        isValidCategory(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'slug', 'description', 'order', 'isActive', 'updatedAt'
+        ]) &&
+        isAdmin();
+
+      allow delete: if isVerified() && isValidId(categoryId) && isAdmin();
+    }
+
+    // Collection: /videos/{videoId}
+    match /videos/{videoId} {
+      allow get: if isValidId(videoId) && (existing().status == 'published' || isAdmin());
+      allow list: if existing().status == 'published' || isAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(videoId) &&
+        isValidVideo(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(videoId) &&
+        isValidVideo(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().authorId == existing().authorId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'category', 'thumbnailUrl', 'videoUrl', 'duration',
+          'isVertical', 'publishedAt', 'status', 'updatedAt'
+        ]) &&
+        isAdmin();
+
+      allow delete: if isVerified() && isValidId(videoId) && isAdmin();
+    }
+
+    // Collection: /settings/{settingId}
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId) && settingId == 'portal';
+      allow list: if isAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(settingId) &&
+        settingId == 'portal' &&
+        isValidSettings(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(settingId) &&
+        settingId == 'portal' &&
+        isValidSettings(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'breakingNewsTicker', 'breakingNewsActive', 'bannerTitle', 'bannerLink',
+          'bannerActive', 'facebookUrl', 'instagramUrl', 'youtubeUrl',
+          'twitterUrl', 'whatsappChannelUrl', 'contactEmail', 'contactPhone',
+          'updatedBy', 'updatedAt'
+        ]) &&
+        isAdmin();
+
+      allow delete: if false;
+    }
+
+    // Collection: /admins/{adminId}
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isSuperAdmin());
+      allow list: if isSuperAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(adminId) &&
+        isValidAdmin(incoming()) &&
+        incoming().createdAt == request.time &&
+        isSuperAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(adminId) &&
+        isValidAdmin(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().email == existing().email &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['role']) &&
+        isSuperAdmin();
+
+      allow delete: if isVerified() && isValidId(adminId) && isSuperAdmin();
+    }
+  }
+}

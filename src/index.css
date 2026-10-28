@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-hindi: 'Noto Sans Devanagari', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Khand', 'Noto Sans Devanagari', sans-serif;
+    --nbi-red: #C8102E;
+    --nbi-red-dark: #9E0B22;
+    --nbi-ink: #0F172A;
+  }
+
+  html {
+    font-family: var(--font-hindi);
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-hindi);
+    background-color: #FFFFFF;
+    color: #0F172A;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+}
+
+/* Hide scrollbars on horizontal category strip while keeping touch scroll smooth */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth breaking news ticker animation */
+@keyframes nbi-marquee {
+  0% {
+    transform: translate3d(0%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-nbi-ticker {
+  display: flex;
+  width: max-content;
+  animation: nbi-marquee 34s linear infinite;
+}
+
+.animate-nbi-ticker:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-nbi-ticker {
+    animation: none;
+  }
+}
+
+/* Hindi long-form article typography */
+.hindi-article-prose p {
+  margin-bottom: 1.25rem;
+  line-height: 1.85;
+  color: #1E293B;
+}
+
+.hindi-article-prose h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
