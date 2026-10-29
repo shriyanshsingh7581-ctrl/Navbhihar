@@ -105,22 +105,51 @@ export const DEFAULT_CATEGORIES: NewsCategory[] = [
 
 export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
   breakingNewsTicker:
-    'पटना मेट्रो के प्रायोरिटी कॉरिडोर पर ट्रायल रन की तैयारी तेज, 5 एलिवेटेड स्टेशनों का काम अंतिम चरण में | बिहार में चौथे चरण की शिक्षक भर्ती (BPSC TRE 4.0) के लिए विभागवार रिक्तियों का रोस्टर तैयार | मुजफ्फरपुर, गया और भागलपुर में नए आईटी और फूड प्रोसेसिंग क्लस्टर को मंजूरी | साइबर ठगी से बचाव के लिए बिहार पुलिस ने जारी की नई हेल्पलाइन गाइडलाइन',
+    'NBI (NavBihar India News) विशेष: अररिया, पूर्णिया और सीमांचल सहित पूरे बिहार की ताज़ा खबरें | पटना मेट्रो के प्रायोरिटी कॉरिडोर पर ट्रायल रन की तैयारी तेज | बिहार में चौथे चरण की शिक्षक भर्ती (BPSC TRE 4.0) के लिए विभागवार रिक्तियों का रोस्टर तैयार | हमारे आधिकारिक WhatsApp चैनल और YouTube (@NBIndianews) से जुड़ें — संपर्क: 9162432466',
   breakingNewsActive: true,
-  bannerTitle: 'NBI विशेष कवरेज: बदलता बिहार — इंफ्रास्ट्रक्चर, शिक्षा और युवा रोजगार पर हमारी एक्सक्लूसिव ग्राउंड रिपोर्ट श्रृंखला',
+  bannerTitle: 'NBI (NavBihar India News) — अररिया और पूरे बिहार की हर बड़ी खबर, ग्राउंड रिपोर्ट और एक्सक्लूसिव कवरेज',
   bannerLink: '/category/bihar',
   bannerActive: true,
-  facebookUrl: 'https://facebook.com/navibiharindia',
-  instagramUrl: 'https://instagram.com/navibiharindia',
-  youtubeUrl: 'https://youtube.com/@navibiharindia',
+  facebookUrl: 'https://www.facebook.com/NavBiharIndiaNews/',
+  instagramUrl: 'https://www.instagram.com/nbindianews/?hl=en',
+  youtubeUrl: 'https://www.youtube.com/@NBIndianews',
   twitterUrl: 'https://x.com/navibiharindia',
-  whatsappChannelUrl: 'https://whatsapp.com/channel/navibiharindia',
-  contactEmail: 'editor@navibiharindia.com',
-  contactPhone: '+91 612-2200108',
+  whatsappChannelUrl: 'https://whatsapp.com/channel/0029Vb9o89DBA1erbNTNPo16',
+  contactEmail: 'nbindianews@gmail.com',
+  contactPhone: '9162432466',
   updatedBy: 'system-default',
 };
 
 export const DEMO_ARTICLES: NewsArticle[] = [
+  {
+    id: 'demo-art-araria',
+    title: 'अररिया और सीमांचल में फोर-लेन हाईवे, रेल कनेक्टिविटी व नए औद्योगिक कॉरिडोर से विकास को मिली नई गति — NBI ग्राउंड रिपोर्ट',
+    slug: 'araria-seemanchal-highway-rail-connectivity-development-nbi-news',
+    category: 'bihar',
+    subCategory: 'बिहार के प्रमुख शहरों की खबरें',
+    city: 'अररिया',
+    description:
+      'अररिया-गलगलिया और अररिया-सुपौल रेल व सड़क परियोजनाओं के तेजी से पूरा होने से पूरे सीमांचल क्षेत्र में व्यापार, कृषि मंडी और युवाओं के रोजगार के नए अवसर खुल रहे हैं।',
+    content: `अररिया (NBI News ब्यूरो)। सीमांचल के प्रमुख केंद्र अररिया में सड़क, रेल और शहरी बुनियादी ढांचे के विस्तार से पूरे क्षेत्र की आर्थिक तस्वीर बदल रही है। अररिया-गलगलिया और अररिया-सुपौल नई रेल लाइन परियोजना तथा फोर-लेन नेशनल हाईवे के सुदृढ़ीकरण से अररिया अब सीधे उत्तर-पूर्व भारत और राजधानी पटना से तेज़ संपर्क से जुड़ रहा है।
+
+कृषि, मक्का और जूट आधारित उद्योगों को मिलेगा बड़ा बाजार
+
+स्थानीय किसानों और व्यापारियों के अनुसार, बेहतर ट्रांसपोर्ट नेटवर्क बनने से अररिया, फारबिसगंज, जोगबनी और आसपास के प्रखंडों के कृषि उत्पादों को देश की बड़ी मंडियों तक भेजना आसान हो गया है। साथ ही जिले में स्वास्थ्य सेवाओं, नए शैक्षणिक संस्थानों और डिजिटल पंचायत केंद्रों के माध्यम से युवाओं को स्थानीय स्तर पर ही बेहतर सुविधाएं मिल रही हैं।
+
+NavBihar India News (NBI) की टीम अररिया के हर प्रखंड और वार्ड से जुड़ी जनसरोकार की खबरों को प्रमुखता से प्रशासन और सरकार तक पहुंचा रही है। किसी भी स्थानीय समस्या या खबर के लिए हमारे व्हाट्सएप और हेल्पलाइन नंबर 9162432466 पर संपर्क करें।`,
+    featuredImage: EDITORIAL_IMAGES.patnaMetro,
+    imageCaption: 'अररिया और सीमांचल में सड़क व बुनियादी ढांचा विकास पर NBI News की विशेष रिपोर्ट',
+    author: 'NBI ब्यूरो प्रमुख, अररिया',
+    authorId: 'demo-admin',
+    publishedAt: '2026-10-29T08:15:00Z',
+    status: 'published',
+    isFeatured: true,
+    isBreaking: true,
+    isTrending: true,
+    trendingRank: 1,
+    views: 21450,
+    isDemo: true,
+  },
   {
     id: 'demo-art-1',
     title: 'पटना मेट्रो प्रायोरिटी कॉरिडोर और आमस-दरभंगा एक्सप्रेसवे को मिली नई रफ्तार, बिहार के 19 जिलों की कनेक्टिविटी में होगा बड़ा बदलाव',

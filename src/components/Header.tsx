@@ -8,6 +8,9 @@ import {
   ChevronRight,
   PlayCircle,
   Newspaper,
+  Phone,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
 import { BrandLogo } from './EditorialImage';
 import { useNews } from '../context/NewsContext';
@@ -52,9 +55,9 @@ export function Header() {
             to="/"
             className="flex items-center gap-2.5 whitespace-nowrap shrink-0 focus:outline-none"
           >
-            <BrandLogo size="sm" className="md:w-11 md:h-11" />
+            <BrandLogo size="sm" className="md:w-12 md:h-12" />
             <span className="text-lg md:text-xl font-extrabold tracking-tight text-slate-950 whitespace-nowrap shrink-0">
-              NaviBihar <span className="text-[#C8102E]">India</span>
+              NavBihar <span className="text-[#C8102E]">India News</span>
             </span>
           </Link>
 
@@ -88,10 +91,10 @@ export function Header() {
               वीडियो न्यूज़
             </Link>
             <Link
-              to="/categories"
+              to="/admin"
               className="hover:text-[#C8102E] transition-colors whitespace-nowrap shrink-0"
             >
-              सभी सेक्शन
+              एडमिन पैनल
             </Link>
           </nav>
 
@@ -157,10 +160,12 @@ export function Header() {
               })}
           </div>
 
-          <div className="hidden lg:flex items-center gap-4 text-xs text-slate-400 whitespace-nowrap shrink-0">
-            <span>पटना · नई दिल्ली</span>
+          <div className="hidden lg:flex items-center gap-3 text-xs text-slate-300 whitespace-nowrap shrink-0">
+            <span>अररिया, बिहार</span>
             <span aria-hidden="true">·</span>
-            <span>{getTodayHindiHeaderDate()}</span>
+            <span>संपर्क: {settings.contactPhone || '9162432466'}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-slate-400">{getTodayHindiHeaderDate()}</span>
           </div>
         </div>
       </div>
@@ -211,17 +216,17 @@ export function Header() {
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
             onClick={() => setDrawerOpen(false)}
           />
-          <aside className="relative w-[84%] max-w-xs bg-white h-full overflow-y-auto shadow-2xl flex flex-col justify-between z-10">
+          <aside className="relative w-[86%] max-w-xs bg-white h-full overflow-y-auto shadow-2xl flex flex-col justify-between z-10">
             <div>
               <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-950 text-white">
                 <div className="flex items-center gap-3">
-                  <BrandLogo size="sm" />
+                  <BrandLogo size="md" />
                   <div>
                     <div className="font-extrabold text-base leading-tight">
-                      NaviBihar India
+                      NavBihar India News
                     </div>
                     <div className="text-[11px] text-slate-300">
-                      NBI News · बिहार और देश की आवाज
+                      NBI · अररिया और बिहार की आवाज
                     </div>
                   </div>
                 </div>
@@ -235,9 +240,18 @@ export function Header() {
                 </button>
               </div>
 
-              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-                <span>{getTodayHindiHeaderDate()}</span>
-                <span>पटना संस्करण</span>
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 font-semibold">
+                  <MapPin className="w-3.5 h-3.5 text-[#C8102E]" />
+                  Araria, Bihar
+                </span>
+                <a
+                  href={`tel:${settings.contactPhone || '9162432466'}`}
+                  className="inline-flex items-center gap-1 font-bold text-[#C8102E]"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  {settings.contactPhone || '9162432466'}
+                </a>
               </div>
 
               <div className="p-3">
@@ -286,6 +300,48 @@ export function Header() {
                       </Link>
                     ))}
                 </div>
+
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 px-3 pt-4 pb-2">
+                  आधिकारिक सोशल मीडिया
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 px-1 text-xs font-bold">
+                  <a
+                    href={settings.whatsappChannelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-between"
+                  >
+                    <span>WhatsApp</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <a
+                    href={settings.youtubeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2.5 rounded-lg bg-red-50 text-red-800 border border-red-200 flex items-center justify-between"
+                  >
+                    <span>YouTube</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <a
+                    href={settings.facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2.5 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 flex items-center justify-between"
+                  >
+                    <span>Facebook</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <a
+                    href={settings.instagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2.5 rounded-lg bg-pink-50 text-pink-800 border border-pink-200 flex items-center justify-between"
+                  >
+                    <span>Instagram</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -293,13 +349,15 @@ export function Header() {
               <Link
                 to="/admin"
                 onClick={() => setDrawerOpen(false)}
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-semibold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-lg bg-[#C8102E] text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#a50d25] transition-colors"
               >
-                <ShieldCheck className="w-4 h-4 text-red-400" />
-                <span>{isAdmin ? 'एडमिन डैशबोर्ड खोलें' : 'NBI एडमिन लॉग इन'}</span>
+                <ShieldCheck className="w-4 h-4" />
+                <span>
+                  {isAdmin ? 'एडमिन डैशबोर्ड खोलें' : 'Admin Login (ID / Password)'}
+                </span>
               </Link>
               <p className="text-[11px] text-center text-slate-500">
-                © NaviBihar India. All Rights Reserved.
+                © NavBihar India News (NBI). All Rights Reserved.
               </p>
             </div>
           </aside>

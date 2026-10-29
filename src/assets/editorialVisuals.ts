@@ -3,7 +3,7 @@
  * Ensures zero broken images, fast mobile loading, and topic-specific visuals.
  */
 
-export const NBI_LOGO_URL = '/assets/aistudio/IMG-20261028-WA0002_67f47005.jpg';
+export const NBI_LOGO_URL = '/assets/aistudio/IMG-20261029-WA0040_1__69a76263.jpg';
 
 function createEditorialSvg(config: {
   bgStart: string;

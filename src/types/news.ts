@@ -66,6 +66,15 @@ export interface PortalSettings {
   updatedBy: string;
 }
 
+export interface AdminCredential {
+  id: string;
+  adminId: string;
+  password: string;
+  name: string;
+  role: 'admin' | 'editor';
+  createdAt: string;
+}
+
 export type BiharSubSection =
   | 'all'
   | 'बिहार की ताज़ा खबरें'

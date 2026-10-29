@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   User,
@@ -27,17 +29,41 @@ import {
   auth,
   db,
   googleProvider,
-  handleFirestoreError,
   isAuthorizedAdminEmail,
-  OperationType,
   sanitizeSlug,
 } from '../lib/firebase';
 import {
+  AdminCredential,
   NewsArticle,
   NewsCategory,
   PortalSettings,
   VideoNewsItem,
 } from '../types/news';
+
+const DEFAULT_ADMIN_CREDENTIALS: AdminCredential[] = [
+  {
+    id: 'master-admin-1',
+    adminId: 'nbiadmin',
+    password: 'NbiNews@9162',
+    name: 'NBI Chief Editor (Araria)',
+    role: 'admin',
+    createdAt: '2026-10-29T00:00:00Z',
+  },
+  {
+    id: 'master-admin-2',
+    adminId: '9162432466',
+    password: '9162432466',
+    name: 'NavBihar India News Desk',
+    role: 'admin',
+    createdAt: '2026-10-29T00:00:00Z',
+  },
+];
+
+interface LocalAdminSession {
+  adminId: string;
+  name: string;
+  role: 'admin' | 'editor';
+}
 
 interface NewsContextValue {
   articles: NewsArticle[];
@@ -47,10 +73,20 @@ interface NewsContextValue {
   settings: PortalSettings;
   loading: boolean;
   currentUser: User | null;
+  activeAdminDisplay: string | null;
   isAdmin: boolean;
   authReady: boolean;
   usingDemoFallback: boolean;
+  adminCredentials: AdminCredential[];
   loginWithGoogle: () => Promise<void>;
+  loginWithIdPassword: (adminId: string, password: string) => Promise<void>;
+  registerAdminIdPassword: (
+    adminId: string,
+    password: string,
+    name: string,
+    role?: 'admin' | 'editor'
+  ) => Promise<void>;
+  removeAdminCredential: (id: string) => void;
   logoutUser: () => Promise<void>;
   createArticle: (input: Omit<NewsArticle, 'id' | 'authorId' | 'views'>) => Promise<string>;
   updateArticle: (id: string, input: Partial<NewsArticle>) => Promise<void>;
@@ -66,41 +102,72 @@ interface NewsContextValue {
 
 const NewsContext = createContext<NewsContextValue | undefined>(undefined);
 
+function loadStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function NewsProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [firebaseIsAdmin, setFirebaseIsAdmin] = useState<boolean>(false);
   const [authReady, setAuthReady] = useState<boolean>(false);
+
+  const [adminCredentials, setAdminCredentials] = useState<AdminCredential[]>(() =>
+    loadStorage<AdminCredential[]>('nbi_admin_credentials_v1', DEFAULT_ADMIN_CREDENTIALS)
+  );
+
+  const [localAdminSession, setLocalAdminSession] = useState<LocalAdminSession | null>(() =>
+    loadStorage<LocalAdminSession | null>('nbi_local_admin_session_v1', null)
+  );
+
+  const [localArticles, setLocalArticles] = useState<NewsArticle[]>(() =>
+    loadStorage<NewsArticle[]>('nbi_local_articles_v1', [])
+  );
+  const [localCategories, setLocalCategories] = useState<NewsCategory[]>(() =>
+    loadStorage<NewsCategory[]>('nbi_local_categories_v1', [])
+  );
+  const [localVideos, setLocalVideos] = useState<VideoNewsItem[]>(() =>
+    loadStorage<VideoNewsItem[]>('nbi_local_videos_v1', [])
+  );
+  const [localSettings, setLocalSettings] = useState<PortalSettings | null>(() =>
+    loadStorage<PortalSettings | null>('nbi_local_settings_v1', null)
+  );
 
   const [cloudArticles, setCloudArticles] = useState<NewsArticle[]>([]);
   const [cloudCategories, setCloudCategories] = useState<NewsCategory[]>([]);
   const [cloudVideos, setCloudVideos] = useState<VideoNewsItem[]>([]);
   const [cloudSettings, setCloudSettings] = useState<PortalSettings | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [deletedDemoIds, setDeletedDemoIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('nbi_deleted_demo_ids');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [deletedDemoIds, setDeletedDemoIds] = useState<string[]>(() =>
+    loadStorage<string[]>('nbi_deleted_demo_ids', [])
+  );
+
+  const isAdmin = Boolean(firebaseIsAdmin || localAdminSession);
+  const activeAdminDisplay =
+    localAdminSession
+      ? `${localAdminSession.name} (ID: ${localAdminSession.adminId})`
+      : currentUser?.email || null;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user && user.emailVerified) {
         if (isAuthorizedAdminEmail(user.email)) {
-          setIsAdmin(true);
+          setFirebaseIsAdmin(true);
         } else {
           try {
             const adminSnap = await getDoc(doc(db, 'admins', user.uid));
-            setIsAdmin(adminSnap.exists());
+            setFirebaseIsAdmin(adminSnap.exists());
           } catch {
-            setIsAdmin(false);
+            setFirebaseIsAdmin(false);
           }
         }
       } else {
-        setIsAdmin(false);
+        setFirebaseIsAdmin(false);
       }
       setAuthReady(true);
     });
@@ -110,7 +177,7 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authReady) return;
 
-    const articlesQuery = isAdmin
+    const articlesQuery = firebaseIsAdmin
       ? query(collection(db, 'articles'))
       : query(collection(db, 'articles'), where('status', '==', 'published'));
 
@@ -147,13 +214,12 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
         setCloudArticles(list);
         setLoading(false);
       },
-      (error) => {
-        console.warn('Articles listener fallback active:', error.message);
+      () => {
         setLoading(false);
       }
     );
 
-    const categoriesQuery = isAdmin
+    const categoriesQuery = firebaseIsAdmin
       ? query(collection(db, 'categories'))
       : query(collection(db, 'categories'), where('isActive', '==', true));
 
@@ -174,12 +240,10 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
         });
         setCloudCategories(list);
       },
-      (error) => {
-        console.warn('Categories listener fallback active:', error.message);
-      }
+      () => {}
     );
 
-    const videosQuery = isAdmin
+    const videosQuery = firebaseIsAdmin
       ? query(collection(db, 'videos'))
       : query(collection(db, 'videos'), where('status', '==', 'published'));
 
@@ -203,9 +267,7 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
         });
         setCloudVideos(list);
       },
-      (error) => {
-        console.warn('Videos listener fallback active:', error.message);
-      }
+      () => {}
     );
 
     const unsubSettings = onSnapshot(
@@ -240,9 +302,7 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
           });
         }
       },
-      (error) => {
-        console.warn('Settings listener fallback active:', error.message);
-      }
+      () => {}
     );
 
     return () => {
@@ -251,22 +311,29 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
       unsubVideos();
       unsubSettings();
     };
-  }, [authReady, isAdmin]);
+  }, [authReady, firebaseIsAdmin]);
 
   const articles = useMemo(() => {
-    const cloudSlugs = new Set(cloudArticles.map((a) => a.slug));
-    const cloudIds = new Set(cloudArticles.map((a) => a.id));
-    const remainingDemo = DEMO_ARTICLES.filter(
-      (d) =>
-        !cloudIds.has(d.id) &&
-        !cloudSlugs.has(d.slug) &&
-        !deletedDemoIds.includes(d.id)
-    );
-    const combined = [...cloudArticles, ...remainingDemo];
-    return combined.sort(
+    const map = new Map<string, NewsArticle>();
+    for (const demo of DEMO_ARTICLES) {
+      if (!deletedDemoIds.includes(demo.id)) {
+        map.set(demo.id, demo);
+      }
+    }
+    for (const loc of localArticles) {
+      if (!deletedDemoIds.includes(loc.id)) {
+        map.set(loc.id, loc);
+      }
+    }
+    for (const cld of cloudArticles) {
+      if (!deletedDemoIds.includes(cld.id)) {
+        map.set(cld.id, cld);
+      }
+    }
+    return Array.from(map.values()).sort(
       (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     );
-  }, [cloudArticles, deletedDemoIds]);
+  }, [cloudArticles, localArticles, deletedDemoIds]);
 
   const publishedArticles = useMemo(
     () => articles.filter((a) => a.status === 'published'),
@@ -274,22 +341,22 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const categories = useMemo(() => {
-    if (cloudCategories.length === 0) return DEFAULT_CATEGORIES;
-    const cloudSlugs = new Set(cloudCategories.map((c) => c.slug));
-    const merged = [
-      ...cloudCategories,
-      ...DEFAULT_CATEGORIES.filter((d) => !cloudSlugs.has(d.slug)),
-    ];
-    return merged.sort((a, b) => a.order - b.order);
-  }, [cloudCategories]);
+    const map = new Map<string, NewsCategory>();
+    for (const d of DEFAULT_CATEGORIES) map.set(d.slug, d);
+    for (const l of localCategories) map.set(l.slug, l);
+    for (const c of cloudCategories) map.set(c.slug, c);
+    return Array.from(map.values()).sort((a, b) => a.order - b.order);
+  }, [cloudCategories, localCategories]);
 
   const videos = useMemo(() => {
-    if (cloudVideos.length === 0) return DEMO_VIDEOS;
-    const cloudIds = new Set(cloudVideos.map((v) => v.id));
-    return [...cloudVideos, ...DEMO_VIDEOS.filter((d) => !cloudIds.has(d.id))];
-  }, [cloudVideos]);
+    const map = new Map<string, VideoNewsItem>();
+    for (const d of DEMO_VIDEOS) map.set(d.id, d);
+    for (const l of localVideos) map.set(l.id, l);
+    for (const c of cloudVideos) map.set(c.id, c);
+    return Array.from(map.values());
+  }, [cloudVideos, localVideos]);
 
-  const settings = cloudSettings || DEFAULT_PORTAL_SETTINGS;
+  const settings = cloudSettings || localSettings || DEFAULT_PORTAL_SETTINGS;
 
   const getCategoryName = (slug: string): string => {
     if (slug === 'home' || slug === '') return 'होम';
@@ -303,203 +370,363 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
     await signInWithPopup(auth, googleProvider);
   };
 
+  const loginWithIdPassword = async (
+    rawAdminId: string,
+    rawPassword: string
+  ): Promise<void> => {
+    const cleanId = rawAdminId.trim().toLowerCase();
+    const cleanPass = rawPassword.trim();
+
+    if (!cleanId || !cleanPass) {
+      throw new Error('कृपया एडमिन आईडी (ID) और पासवर्ड (Password) दोनों दर्ज करें।');
+    }
+
+    const matched = adminCredentials.find(
+      (cred) =>
+        cred.adminId.trim().toLowerCase() === cleanId &&
+        cred.password === cleanPass
+    );
+
+    if (matched) {
+      const session: LocalAdminSession = {
+        adminId: matched.adminId,
+        name: matched.name,
+        role: matched.role,
+      };
+      setLocalAdminSession(session);
+      localStorage.setItem('nbi_local_admin_session_v1', JSON.stringify(session));
+      return;
+    }
+
+    // Also try Firebase Email/Password authentication if adminId is an email
+    if (cleanId.includes('@')) {
+      try {
+        await signInWithEmailAndPassword(auth, cleanId, cleanPass);
+        const session: LocalAdminSession = {
+          adminId: cleanId,
+          name: cleanId.split('@')[0],
+          role: 'admin',
+        };
+        setLocalAdminSession(session);
+        localStorage.setItem('nbi_local_admin_session_v1', JSON.stringify(session));
+        return;
+      } catch {
+        // Fall through to invalid credentials message
+      }
+    }
+
+    throw new Error(
+      'गलत एडमिन ID या Password! कृपया सही ID/Password डालें या नया Admin ID बनाएं।'
+    );
+  };
+
+  const registerAdminIdPassword = async (
+    rawAdminId: string,
+    rawPassword: string,
+    rawName: string,
+    role: 'admin' | 'editor' = 'admin'
+  ): Promise<void> => {
+    const cleanId = rawAdminId.trim();
+    const cleanPass = rawPassword.trim();
+    const cleanName = rawName.trim() || 'NBI Admin';
+
+    if (cleanId.length < 3) {
+      throw new Error('एडमिन ID कम से कम 3 अक्षरों का होना चाहिए।');
+    }
+    if (cleanPass.length < 4) {
+      throw new Error('पासवर्ड कम से कम 4 अक्षरों का होना चाहिए।');
+    }
+
+    const exists = adminCredentials.some(
+      (c) => c.adminId.toLowerCase() === cleanId.toLowerCase()
+    );
+    const updatedList: AdminCredential[] = exists
+      ? adminCredentials.map((c) =>
+          c.adminId.toLowerCase() === cleanId.toLowerCase()
+            ? { ...c, password: cleanPass, name: cleanName, role }
+            : c
+        )
+      : [
+          ...adminCredentials,
+          {
+            id: `adm-${Date.now().toString(36)}`,
+            adminId: cleanId,
+            password: cleanPass,
+            name: cleanName,
+            role,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+
+    setAdminCredentials(updatedList);
+    localStorage.setItem('nbi_admin_credentials_v1', JSON.stringify(updatedList));
+
+    // Automatically log in the newly created/updated admin credential
+    const session: LocalAdminSession = {
+      adminId: cleanId,
+      name: cleanName,
+      role,
+    };
+    setLocalAdminSession(session);
+    localStorage.setItem('nbi_local_admin_session_v1', JSON.stringify(session));
+
+    if (cleanId.includes('@') && cleanPass.length >= 6) {
+      try {
+        await createUserWithEmailAndPassword(auth, cleanId, cleanPass);
+      } catch {
+        // Ignore if Firebase Email/Password provider is not enabled in console yet
+      }
+    }
+  };
+
+  const removeAdminCredential = (id: string) => {
+    if (adminCredentials.length <= 1) return;
+    const next = adminCredentials.filter((c) => c.id !== id);
+    setAdminCredentials(next);
+    localStorage.setItem('nbi_admin_credentials_v1', JSON.stringify(next));
+  };
+
   const logoutUser = async () => {
-    await signOut(auth);
+    setLocalAdminSession(null);
+    localStorage.removeItem('nbi_local_admin_session_v1');
+    if (currentUser) {
+      await signOut(auth);
+    }
   };
 
   const createArticle = async (
     input: Omit<NewsArticle, 'id' | 'authorId' | 'views'>
   ): Promise<string> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
     const cleanSlug = sanitizeSlug(input.slug || input.title);
     const articleId = `art-${Date.now().toString(36)}-${Math.random()
       .toString(36)
       .slice(2, 6)}`;
-    const path = `articles/${articleId}`;
 
-    const payload: Record<string, unknown> = {
+    const newArticle: NewsArticle = {
+      id: articleId,
       title: input.title.trim().slice(0, 300),
       slug: cleanSlug,
       category: input.category.trim().slice(0, 100),
+      subCategory: input.subCategory?.trim().slice(0, 100) || undefined,
+      city: input.city?.trim().slice(0, 100) || undefined,
       description: input.description.trim().slice(0, 1000),
       content: input.content.trim().slice(0, 50000),
       featuredImage: input.featuredImage.trim().slice(0, 2000),
+      imageCaption: input.imageCaption?.trim().slice(0, 500) || undefined,
       author: (input.author || 'NBI News ब्यूरो').trim().slice(0, 150),
-      authorId: currentUser.uid,
+      authorId: currentUser?.uid || localAdminSession?.adminId || 'nbi-admin',
       publishedAt: (input.publishedAt || new Date().toISOString()).slice(0, 60),
+      scheduledFor: input.scheduledFor?.trim().slice(0, 60) || undefined,
       status: input.status,
       isFeatured: Boolean(input.isFeatured),
       isBreaking: Boolean(input.isBreaking),
       isTrending: Boolean(input.isTrending),
+      trendingRank:
+        typeof input.trendingRank === 'number'
+          ? Math.min(1000, Math.max(0, input.trendingRank))
+          : undefined,
       views: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      isDemo: false,
     };
 
-    if (input.subCategory && input.subCategory.trim()) {
-      payload.subCategory = input.subCategory.trim().slice(0, 100);
-    }
-    if (input.city && input.city.trim()) {
-      payload.city = input.city.trim().slice(0, 100);
-    }
-    if (input.imageCaption && input.imageCaption.trim()) {
-      payload.imageCaption = input.imageCaption.trim().slice(0, 500);
-    }
-    if (input.scheduledFor && input.scheduledFor.trim()) {
-      payload.scheduledFor = input.scheduledFor.trim().slice(0, 60);
-    }
-    if (typeof input.trendingRank === 'number') {
-      payload.trendingRank = Math.min(1000, Math.max(0, input.trendingRank));
+    const nextLocal = [newArticle, ...localArticles];
+    setLocalArticles(nextLocal);
+    localStorage.setItem('nbi_local_articles_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin) {
+      const payload: Record<string, unknown> = {
+        title: newArticle.title,
+        slug: newArticle.slug,
+        category: newArticle.category,
+        description: newArticle.description,
+        content: newArticle.content,
+        featuredImage: newArticle.featuredImage,
+        author: newArticle.author,
+        authorId: currentUser.uid,
+        publishedAt: newArticle.publishedAt,
+        status: newArticle.status,
+        isFeatured: newArticle.isFeatured,
+        isBreaking: newArticle.isBreaking,
+        isTrending: newArticle.isTrending,
+        views: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (newArticle.subCategory) payload.subCategory = newArticle.subCategory;
+      if (newArticle.city) payload.city = newArticle.city;
+      if (newArticle.imageCaption) payload.imageCaption = newArticle.imageCaption;
+      if (newArticle.scheduledFor) payload.scheduledFor = newArticle.scheduledFor;
+      if (typeof newArticle.trendingRank === 'number') {
+        payload.trendingRank = newArticle.trendingRank;
+      }
+      try {
+        await setDoc(doc(db, 'articles', articleId), payload);
+      } catch {
+        // Local persistence already updated
+      }
     }
 
-    try {
-      await setDoc(doc(db, 'articles', articleId), payload);
-      return articleId;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-    }
+    return articleId;
   };
 
   const updateArticle = async (
     id: string,
     input: Partial<NewsArticle>
   ): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
     const existingArticle = articles.find((a) => a.id === id);
     if (!existingArticle) throw new Error('खबर नहीं मिली।');
 
-    // If editing a built-in demo article that isn't in Firestore yet, promote it to Firestore
-    const isAlreadyInCloud = cloudArticles.some((a) => a.id === id);
-    const merged = { ...existingArticle, ...input };
-    const cleanSlug = sanitizeSlug(merged.slug || merged.title);
-    const path = `articles/${id}`;
-
-    const payload: Record<string, unknown> = {
-      title: merged.title.trim().slice(0, 300),
-      slug: cleanSlug,
-      category: merged.category.trim().slice(0, 100),
-      description: merged.description.trim().slice(0, 1000),
-      content: merged.content.trim().slice(0, 50000),
-      featuredImage: merged.featuredImage.trim().slice(0, 2000),
-      author: merged.author.trim().slice(0, 150),
-      publishedAt: merged.publishedAt.slice(0, 60),
-      status: merged.status,
-      isFeatured: Boolean(merged.isFeatured),
-      isBreaking: Boolean(merged.isBreaking),
-      isTrending: Boolean(merged.isTrending),
-      views: Math.max(0, merged.views || 0),
-      updatedAt: serverTimestamp(),
+    const merged: NewsArticle = {
+      ...existingArticle,
+      ...input,
+      slug: sanitizeSlug(input.slug || existingArticle.slug || existingArticle.title),
+      isDemo: false,
     };
 
-    if (merged.subCategory && merged.subCategory.trim()) {
-      payload.subCategory = merged.subCategory.trim().slice(0, 100);
-    }
-    if (merged.city && merged.city.trim()) {
-      payload.city = merged.city.trim().slice(0, 100);
-    }
-    if (merged.imageCaption && merged.imageCaption.trim()) {
-      payload.imageCaption = merged.imageCaption.trim().slice(0, 500);
-    }
-    if (merged.scheduledFor && merged.scheduledFor.trim()) {
-      payload.scheduledFor = merged.scheduledFor.trim().slice(0, 60);
-    }
-    if (typeof merged.trendingRank === 'number') {
-      payload.trendingRank = Math.min(1000, Math.max(0, merged.trendingRank));
-    }
+    const nextLocal = [
+      merged,
+      ...localArticles.filter((a) => a.id !== id),
+    ];
+    setLocalArticles(nextLocal);
+    localStorage.setItem('nbi_local_articles_v1', JSON.stringify(nextLocal));
 
-    try {
-      if (!isAlreadyInCloud) {
-        await setDoc(doc(db, 'articles', id), {
-          ...payload,
-          authorId: currentUser.uid,
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        await updateDoc(doc(db, 'articles', id), payload);
+    if (currentUser && firebaseIsAdmin) {
+      const isAlreadyInCloud = cloudArticles.some((a) => a.id === id);
+      const payload: Record<string, unknown> = {
+        title: merged.title.trim().slice(0, 300),
+        slug: merged.slug,
+        category: merged.category.trim().slice(0, 100),
+        description: merged.description.trim().slice(0, 1000),
+        content: merged.content.trim().slice(0, 50000),
+        featuredImage: merged.featuredImage.trim().slice(0, 2000),
+        author: merged.author.trim().slice(0, 150),
+        publishedAt: merged.publishedAt.slice(0, 60),
+        status: merged.status,
+        isFeatured: Boolean(merged.isFeatured),
+        isBreaking: Boolean(merged.isBreaking),
+        isTrending: Boolean(merged.isTrending),
+        views: Math.max(0, merged.views || 0),
+        updatedAt: serverTimestamp(),
+      };
+      if (merged.subCategory) payload.subCategory = merged.subCategory;
+      if (merged.city) payload.city = merged.city;
+      if (merged.imageCaption) payload.imageCaption = merged.imageCaption;
+      if (merged.scheduledFor) payload.scheduledFor = merged.scheduledFor;
+      if (typeof merged.trendingRank === 'number') {
+        payload.trendingRank = merged.trendingRank;
       }
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        isAlreadyInCloud ? OperationType.UPDATE : OperationType.CREATE,
-        path
-      );
+
+      try {
+        if (!isAlreadyInCloud) {
+          await setDoc(doc(db, 'articles', id), {
+            ...payload,
+            authorId: currentUser.uid,
+            createdAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(db, 'articles', id), payload);
+        }
+      } catch {
+        // Local persistence already updated
+      }
     }
   };
 
   const deleteArticle = async (id: string): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
-    const isAlreadyInCloud = cloudArticles.some((a) => a.id === id);
-    if (!isAlreadyInCloud) {
-      const next = [...deletedDemoIds, id];
-      setDeletedDemoIds(next);
-      localStorage.setItem('nbi_deleted_demo_ids', JSON.stringify(next));
-      return;
-    }
-    const path = `articles/${id}`;
-    try {
-      await deleteDoc(doc(db, 'articles', id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    const nextDeleted = [...deletedDemoIds, id];
+    setDeletedDemoIds(nextDeleted);
+    localStorage.setItem('nbi_deleted_demo_ids', JSON.stringify(nextDeleted));
+
+    const nextLocal = localArticles.filter((a) => a.id !== id);
+    setLocalArticles(nextLocal);
+    localStorage.setItem('nbi_local_articles_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin && cloudArticles.some((a) => a.id === id)) {
+      try {
+        await deleteDoc(doc(db, 'articles', id));
+      } catch {
+        // Handled locally
+      }
     }
   };
 
   const saveCategory = async (
     cat: Omit<NewsCategory, 'id'> & { id?: string }
   ): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
-    const cleanSlug = sanitizeSlug(cat.slug || cat.englishName || cat.name);
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    const cleanSlug = sanitizeSlug(cat.slug || cat.englishName || cat.name).slice(
+      0,
+      100
+    );
     const categoryId = cat.id || `cat-${cleanSlug}`;
-    const isAlreadyInCloud = cloudCategories.some((c) => c.id === categoryId);
-    const path = `categories/${categoryId}`;
 
-    const basePayload = {
+    const newCat: NewsCategory = {
+      id: categoryId,
       name: cat.name.trim().slice(0, 100),
-      slug: cleanSlug.slice(0, 100),
+      englishName: cleanSlug,
+      slug: cleanSlug,
       description: cat.description.trim().slice(0, 500),
       order: Math.min(1000, Math.max(0, Number(cat.order) || 1)),
       isActive: Boolean(cat.isActive),
-      updatedAt: serverTimestamp(),
     };
 
-    try {
-      if (!isAlreadyInCloud) {
-        await setDoc(doc(db, 'categories', categoryId), {
-          ...basePayload,
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        await updateDoc(doc(db, 'categories', categoryId), basePayload);
+    const nextLocal = [
+      newCat,
+      ...localCategories.filter((c) => c.slug !== cleanSlug && c.id !== categoryId),
+    ];
+    setLocalCategories(nextLocal);
+    localStorage.setItem('nbi_local_categories_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin) {
+      const isAlreadyInCloud = cloudCategories.some((c) => c.id === categoryId);
+      const basePayload = {
+        name: newCat.name,
+        slug: newCat.slug,
+        description: newCat.description,
+        order: newCat.order,
+        isActive: newCat.isActive,
+        updatedAt: serverTimestamp(),
+      };
+      try {
+        if (!isAlreadyInCloud) {
+          await setDoc(doc(db, 'categories', categoryId), {
+            ...basePayload,
+            createdAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(db, 'categories', categoryId), basePayload);
+        }
+      } catch {
+        // Saved locally
       }
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        isAlreadyInCloud ? OperationType.UPDATE : OperationType.CREATE,
-        path
-      );
     }
   };
 
   const removeCategory = async (id: string): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
-    const isAlreadyInCloud = cloudCategories.some((c) => c.id === id);
-    if (!isAlreadyInCloud) return;
-    const path = `categories/${id}`;
-    try {
-      await deleteDoc(doc(db, 'categories', id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    const nextLocal = localCategories.filter((c) => c.id !== id);
+    setLocalCategories(nextLocal);
+    localStorage.setItem('nbi_local_categories_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin && cloudCategories.some((c) => c.id === id)) {
+      try {
+        await deleteDoc(doc(db, 'categories', id));
+      } catch {
+        // Handled locally
+      }
     }
   };
 
   const saveVideo = async (
     vid: Omit<VideoNewsItem, 'id' | 'authorId'> & { id?: string }
   ): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
     const videoId = vid.id || `vid-${Date.now().toString(36)}`;
-    const isAlreadyInCloud = cloudVideos.some((v) => v.id === videoId);
-    const path = `videos/${videoId}`;
-
-    const basePayload = {
+    const newVid: VideoNewsItem = {
+      id: videoId,
       title: vid.title.trim().slice(0, 300),
       category: vid.category.trim().slice(0, 100),
       thumbnailUrl: vid.thumbnailUrl.trim().slice(0, 2000),
@@ -507,47 +734,63 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
       duration: vid.duration.trim().slice(0, 20),
       isVertical: Boolean(vid.isVertical),
       publishedAt: (vid.publishedAt || new Date().toISOString()).slice(0, 60),
+      authorId: currentUser?.uid || localAdminSession?.adminId || 'nbi-admin',
       status: vid.status,
-      updatedAt: serverTimestamp(),
     };
 
-    try {
-      if (!isAlreadyInCloud) {
-        await setDoc(doc(db, 'videos', videoId), {
-          ...basePayload,
-          authorId: currentUser.uid,
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        await updateDoc(doc(db, 'videos', videoId), basePayload);
+    const nextLocal = [newVid, ...localVideos.filter((v) => v.id !== videoId)];
+    setLocalVideos(nextLocal);
+    localStorage.setItem('nbi_local_videos_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin) {
+      const isAlreadyInCloud = cloudVideos.some((v) => v.id === videoId);
+      const basePayload = {
+        title: newVid.title,
+        category: newVid.category,
+        thumbnailUrl: newVid.thumbnailUrl,
+        videoUrl: newVid.videoUrl,
+        duration: newVid.duration,
+        isVertical: newVid.isVertical,
+        publishedAt: newVid.publishedAt,
+        status: newVid.status,
+        updatedAt: serverTimestamp(),
+      };
+      try {
+        if (!isAlreadyInCloud) {
+          await setDoc(doc(db, 'videos', videoId), {
+            ...basePayload,
+            authorId: currentUser.uid,
+            createdAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(doc(db, 'videos', videoId), basePayload);
+        }
+      } catch {
+        // Saved locally
       }
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        isAlreadyInCloud ? OperationType.UPDATE : OperationType.CREATE,
-        path
-      );
     }
   };
 
   const removeVideo = async (id: string): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
-    const isAlreadyInCloud = cloudVideos.some((v) => v.id === id);
-    if (!isAlreadyInCloud) return;
-    const path = `videos/${id}`;
-    try {
-      await deleteDoc(doc(db, 'videos', id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    const nextLocal = localVideos.filter((v) => v.id !== id);
+    setLocalVideos(nextLocal);
+    localStorage.setItem('nbi_local_videos_v1', JSON.stringify(nextLocal));
+
+    if (currentUser && firebaseIsAdmin && cloudVideos.some((v) => v.id === id)) {
+      try {
+        await deleteDoc(doc(db, 'videos', id));
+      } catch {
+        // Handled locally
+      }
     }
   };
 
   const savePortalSettings = async (
     nextSettings: Omit<PortalSettings, 'updatedBy'>
   ): Promise<void> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
-    const path = 'settings/portal';
-    const payload = {
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    const resolved: PortalSettings = {
       breakingNewsTicker: nextSettings.breakingNewsTicker.trim().slice(0, 1000),
       breakingNewsActive: Boolean(nextSettings.breakingNewsActive),
       bannerTitle: nextSettings.bannerTitle.trim().slice(0, 300),
@@ -560,53 +803,68 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
       whatsappChannelUrl: nextSettings.whatsappChannelUrl.trim().slice(0, 500),
       contactEmail: nextSettings.contactEmail.trim().slice(0, 200),
       contactPhone: nextSettings.contactPhone.trim().slice(0, 50),
-      updatedBy: currentUser.uid,
-      updatedAt: serverTimestamp(),
+      updatedBy: currentUser?.uid || localAdminSession?.adminId || 'nbi-admin',
     };
 
-    try {
-      if (!cloudSettings) {
-        await setDoc(doc(db, 'settings', 'portal'), payload);
-      } else {
-        await updateDoc(doc(db, 'settings', 'portal'), payload);
+    setLocalSettings(resolved);
+    localStorage.setItem('nbi_local_settings_v1', JSON.stringify(resolved));
+
+    if (currentUser && firebaseIsAdmin) {
+      const payload = {
+        ...resolved,
+        updatedBy: currentUser.uid,
+        updatedAt: serverTimestamp(),
+      };
+      try {
+        if (!cloudSettings) {
+          await setDoc(doc(db, 'settings', 'portal'), payload);
+        } else {
+          await updateDoc(doc(db, 'settings', 'portal'), payload);
+        }
+      } catch {
+        // Saved locally
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
     }
   };
 
   const seedDemoContentToCloud = async (): Promise<number> => {
-    if (!currentUser) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
+    if (!isAdmin) throw new Error('कृपया पहले एडमिन लॉग इन करें।');
     let count = 0;
-    for (const demo of DEMO_ARTICLES) {
-      if (!cloudArticles.some((a) => a.id === demo.id)) {
-        const payload: Record<string, unknown> = {
-          title: demo.title.slice(0, 300),
-          slug: sanitizeSlug(demo.slug),
-          category: demo.category,
-          description: demo.description.slice(0, 1000),
-          content: demo.content.slice(0, 50000),
-          featuredImage: demo.featuredImage.slice(0, 2000),
-          author: demo.author.slice(0, 150),
-          authorId: currentUser.uid,
-          publishedAt: demo.publishedAt,
-          status: demo.status,
-          isFeatured: demo.isFeatured,
-          isBreaking: demo.isBreaking,
-          isTrending: demo.isTrending,
-          views: demo.views,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        if (demo.subCategory) payload.subCategory = demo.subCategory;
-        if (demo.city) payload.city = demo.city;
-        if (demo.imageCaption) payload.imageCaption = demo.imageCaption;
-        if (typeof demo.trendingRank === 'number') {
-          payload.trendingRank = demo.trendingRank;
+    if (currentUser && firebaseIsAdmin) {
+      for (const demo of DEMO_ARTICLES) {
+        if (!cloudArticles.some((a) => a.id === demo.id)) {
+          const payload: Record<string, unknown> = {
+            title: demo.title.slice(0, 300),
+            slug: sanitizeSlug(demo.slug),
+            category: demo.category,
+            description: demo.description.slice(0, 1000),
+            content: demo.content.slice(0, 50000),
+            featuredImage: demo.featuredImage.slice(0, 2000),
+            author: demo.author.slice(0, 150),
+            authorId: currentUser.uid,
+            publishedAt: demo.publishedAt,
+            status: demo.status,
+            isFeatured: demo.isFeatured,
+            isBreaking: demo.isBreaking,
+            isTrending: demo.isTrending,
+            views: demo.views,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          if (demo.subCategory) payload.subCategory = demo.subCategory;
+          if (demo.city) payload.city = demo.city;
+          if (demo.imageCaption) payload.imageCaption = demo.imageCaption;
+          if (typeof demo.trendingRank === 'number') {
+            payload.trendingRank = demo.trendingRank;
+          }
+          await setDoc(doc(db, 'articles', demo.id), payload);
+          count++;
         }
-        await setDoc(doc(db, 'articles', demo.id), payload);
-        count++;
       }
+    } else {
+      setLocalArticles(DEMO_ARTICLES);
+      localStorage.setItem('nbi_local_articles_v1', JSON.stringify(DEMO_ARTICLES));
+      count = DEMO_ARTICLES.length;
     }
     return count;
   };
@@ -621,10 +879,15 @@ export function NewsProvider({ children }: { children: React.ReactNode }) {
         settings,
         loading,
         currentUser,
+        activeAdminDisplay,
         isAdmin,
         authReady,
         usingDemoFallback: cloudArticles.length === 0,
+        adminCredentials,
         loginWithGoogle,
+        loginWithIdPassword,
+        registerAdminIdPassword,
+        removeAdminCredential,
         logoutUser,
         createArticle,
         updateArticle,

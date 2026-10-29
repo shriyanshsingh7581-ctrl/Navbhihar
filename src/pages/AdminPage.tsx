@@ -15,6 +15,10 @@ import {
   AlertCircle,
   CloudUpload,
   ArrowLeft,
+  KeyRound,
+  UserPlus,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useNews } from '../context/NewsContext';
 import { BrandLogo, EditorialImage } from '../components/EditorialImage';
@@ -24,7 +28,14 @@ import { ArticleStatus, NewsArticle, NewsCategory, VideoNewsItem } from '../type
 import { sanitizeSlug } from '../lib/firebase';
 import { formatHindiDate } from '../utils/formatters';
 
-type AdminTab = 'dashboard' | 'editor' | 'articles' | 'videos' | 'categories' | 'settings';
+type AdminTab =
+  | 'dashboard'
+  | 'editor'
+  | 'articles'
+  | 'videos'
+  | 'categories'
+  | 'credentials'
+  | 'settings';
 
 export function AdminPage() {
   const {
@@ -32,10 +43,14 @@ export function AdminPage() {
     categories,
     videos,
     settings,
-    currentUser,
+    activeAdminDisplay,
     isAdmin,
     authReady,
+    adminCredentials,
     loginWithGoogle,
+    loginWithIdPassword,
+    registerAdminIdPassword,
+    removeAdminCredential,
     logoutUser,
     createArticle,
     updateArticle,
@@ -48,6 +63,16 @@ export function AdminPage() {
     seedDemoContentToCloud,
     getCategoryName,
   } = useNews();
+
+  // Login Screen States
+  const [authMode, setAuthMode] = useState<'login' | 'create'>('login');
+  const [loginId, setLoginId] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminId, setNewAdminId] = useState('');
+  const [newAdminPass, setNewAdminPass] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [statusBanner, setStatusBanner] = useState<{
@@ -62,12 +87,12 @@ export function AdminPage() {
   const [artSlug, setArtSlug] = useState('');
   const [artCategory, setArtCategory] = useState('bihar');
   const [artSubCategory, setArtSubCategory] = useState('बिहार की ताज़ा खबरें');
-  const [artCity, setArtCity] = useState('पटना');
+  const [artCity, setArtCity] = useState('अररिया');
   const [artDescription, setArtDescription] = useState('');
   const [artContent, setArtContent] = useState('');
   const [artImage, setArtImage] = useState(EDITORIAL_IMAGES.patnaMetro);
   const [artImageCaption, setArtImageCaption] = useState('');
-  const [artAuthor, setArtAuthor] = useState('NBI स्टेट ब्यूरो, पटना');
+  const [artAuthor, setArtAuthor] = useState('NBI ब्यूरो, अररिया');
   const [artStatus, setArtStatus] = useState<ArticleStatus>('published');
   const [artScheduledFor, setArtScheduledFor] = useState('');
   const [artIsFeatured, setArtIsFeatured] = useState(false);
@@ -112,18 +137,51 @@ export function AdminPage() {
     setTimeout(() => setStatusBanner(null), 4000);
   };
 
+  const handleIdPasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    try {
+      await loginWithIdPassword(loginId, loginPass);
+    } catch (err) {
+      setAuthError(
+        err instanceof Error ? err.message : 'लॉग इन करने में समस्या आई।'
+      );
+    }
+  };
+
+  const handleCreateAdminId = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    try {
+      await registerAdminIdPassword(
+        newAdminId,
+        newAdminPass,
+        newAdminName || 'NBI Admin',
+        'admin'
+      );
+      setNewAdminId('');
+      setNewAdminPass('');
+      setNewAdminName('');
+      showToast('success', 'नया Admin ID और Password सफलतापूर्वक बन गया!');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'त्रुटि हुई।';
+      setAuthError(msg);
+      showToast('error', msg);
+    }
+  };
+
   const resetArticleEditor = () => {
     setEditingArticleId(null);
     setArtTitle('');
     setArtSlug('');
     setArtCategory('bihar');
     setArtSubCategory('बिहार की ताज़ा खबरें');
-    setArtCity('पटना');
+    setArtCity('अररिया');
     setArtDescription('');
     setArtContent('');
     setArtImage(EDITORIAL_IMAGES.patnaMetro);
     setArtImageCaption('');
-    setArtAuthor('NBI स्टेट ब्यूरो, पटना');
+    setArtAuthor('NBI ब्यूरो, अररिया');
     setArtStatus('published');
     setArtScheduledFor('');
     setArtIsFeatured(false);
@@ -178,33 +236,25 @@ export function AdminPage() {
           return;
         }
       } catch {
-        // Fallback to compact client-side Data URL below
+        // Fallback to client-side Canvas resize below
       } finally {
         setSubmitting(false);
       }
     }
 
-    // Compress image via HTML5 Canvas so it fits well within Firestore's 2000-char string constraint or local preview
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 80;
-        canvas.height = 45;
+        canvas.width = 480;
+        canvas.height = 270;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const compactDataUrl = canvas.toDataURL('image/jpeg', 0.5);
-          if (compactDataUrl.length <= 1950) {
-            setArtImage(compactDataUrl);
-            showToast('success', 'इमेज थंबनेल तैयार हो गया!');
-          } else {
-            showToast(
-              'error',
-              'बड़ी इमेज के लिए कृपया डायरेक्ट Image URL या Cloudinary कॉन्फ़िगरेशन का उपयोग करें।'
-            );
-          }
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          setArtImage(dataUrl);
+          showToast('success', 'इमेज सफलतापूर्वक अपलोड और सेट हो गई!');
         }
       };
       img.src = String(reader.result);
@@ -245,7 +295,7 @@ export function AdminPage() {
         showToast('success', 'खबर सफलतापूर्वक अपडेट हो गई!');
       } else {
         await createArticle(payload);
-        showToast('success', 'नई खबर सफलतापूर्वक सहेजी गई!');
+        showToast('success', 'नई खबर सफलतापूर्वक प्रकाशित / सेव हो गई!');
       }
       resetArticleEditor();
       setActiveTab('articles');
@@ -331,7 +381,7 @@ export function AdminPage() {
         contactEmail,
         contactPhone,
       });
-      showToast('success', 'पोर्टल सेटिंग्स और ब्रेकिंग न्यूज़ टिकर अपडेट हो गए!');
+      showToast('success', 'पोर्टल सेटिंग्स और सोशल लिंक्स अपडेट हो गए!');
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : 'त्रुटि हुई।');
     } finally {
@@ -346,8 +396,8 @@ export function AdminPage() {
       showToast(
         'success',
         count > 0
-          ? `${count} डेमो खबरें क्लाउड डेटाबेस में सिंक हो गईं!`
-          : 'सभी डेमो खबरें पहले से डेटाबेस में मौजूद हैं।'
+          ? `${count} खबरें डेटाबेस में सफलतापूर्वक सिंक हो गईं!`
+          : 'सभी खबरें पहले से डेटाबेस में मौजूद हैं।'
       );
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : 'सिंक में त्रुटि।');
@@ -371,52 +421,221 @@ export function AdminPage() {
     );
   }
 
-  // Protected Login Screen if not authenticated as Admin
-  if (!currentUser || !isAdmin) {
+  // Protected Login & Create Admin ID Screen when not logged in
+  if (!isAdmin) {
     return (
       <>
         <SEOHead
-          title="NBI Newsroom Admin Login — NaviBihar India"
-          description="NaviBihar India (NBI News) संपादकीय और न्यूज़ मैनेजमेंट एडमिन लॉग इन।"
+          title="Admin Login (ID & Password) — NavBihar India News (NBI)"
+          description="NavBihar India News (NBI) संपादकीय और न्यूज़ मैनेजमेंट एडमिन लॉग इन पैनल।"
           canonicalPath="/admin"
         />
-        <main className="max-w-md mx-auto px-4 py-14">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm text-center">
-            <div className="flex justify-center mb-4">
-              <BrandLogo size="lg" />
+        <main className="max-w-md mx-auto px-4 py-10 sm:py-14">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <div className="flex flex-col items-center text-center mb-6">
+              <BrandLogo size="lg" className="mb-3" />
+              <h1 className="text-2xl font-extrabold text-slate-950">
+                NavBihar India News (NBI)
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                एडमिन कंट्रोल पैनल · Araria, Bihar (9162432466)
+              </p>
             </div>
-            <h1 className="text-2xl font-extrabold text-slate-950 mb-1">
-              NaviBihar India CMS
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mb-6">
-              NBI News संपादकीय कंट्रोल पैनल में प्रवेश के लिए अपने अधिकृत Google अकाउंट से साइन-इन करें।
-            </p>
 
-            {currentUser && !isAdmin && (
-              <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3.5 text-xs mb-5 text-left">
-                आपका वर्तमान खाता (<strong>{currentUser.email}</strong>) एडमिन के रूप में अधिकृत नहीं है। कृपया अधिकृत एडमिन ईमेल से लॉग इन करें।
+            {/* Mode Switcher: Login with ID/Password vs Create New Admin ID */}
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl mb-6 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError(null);
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                  authMode === 'login'
+                    ? 'bg-slate-950 text-white shadow-2xs'
+                    : 'text-slate-700 hover:text-slate-950'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>ID / Password लॉग इन</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('create');
+                  setAuthError(null);
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                  authMode === 'create'
+                    ? 'bg-slate-950 text-white shadow-2xs'
+                    : 'text-slate-700 hover:text-slate-950'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Create Admin ID</span>
+              </button>
+            </div>
+
+            {authError && (
+              <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs font-semibold mb-4 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span>{authError}</span>
               </div>
             )}
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleIdPasswordLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Admin ID / मोबाइल नंबर *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    placeholder="उदा: nbiadmin या 9162432466"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold focus:border-[#C8102E] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Password (पासवर्ड) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      required
+                      value={loginPass}
+                      onChange={(e) => setLoginPass(e.target.value)}
+                      placeholder="अपना एडमिन पासवर्ड दर्ज करें"
+                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold focus:border-[#C8102E] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
+                    >
+                      {showPass ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full min-h-[46px] px-5 py-3 rounded-xl bg-[#C8102E] hover:bg-[#a50d25] text-white text-sm font-bold transition-colors"
+                >
+                  एडमिन पैनल में लॉग इन करें (Login)
+                </button>
+
+                {/* Helpful Default Credentials Box */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-700 space-y-2">
+                  <div className="font-bold text-slate-900">
+                    तैयार एडमिन लॉग इन विवरण (Default Admin Credentials):
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded-lg border border-slate-200">
+                    <div>
+                      <span className="text-slate-500">Admin ID:</span>{' '}
+                      <strong className="font-mono text-slate-900">nbiadmin</strong>
+                      <br />
+                      <span className="text-slate-500">Password:</span>{' '}
+                      <strong className="font-mono text-slate-900">NbiNews@9162</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">या ID:</span>{' '}
+                      <strong className="font-mono text-slate-900">9162432466</strong>
+                      <br />
+                      <span className="text-slate-500">Password:</span>{' '}
+                      <strong className="font-mono text-slate-900">9162432466</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginId('nbiadmin');
+                      setLoginPass('NbiNews@9162');
+                    }}
+                    className="w-full py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+                  >
+                    1-Click Auto-Fill ID & Password
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleCreateAdminId} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    आपका नाम / डेस्क नाम (Admin Name) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAdminName}
+                    onChange={(e) => setNewAdminName(e.target.value)}
+                    placeholder="उदा: NBI Editor Araria"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    नया Admin ID चुनें (Create Admin ID) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAdminId}
+                    onChange={(e) => setNewAdminId(e.target.value)}
+                    placeholder="उदा: araria_admin या मोबाइल नंबर"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    नया Password बनाएं (Create Password) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAdminPass}
+                    onChange={(e) => setNewAdminPass(e.target.value)}
+                    placeholder="कम से कम 4 अक्षरों का पासवर्ड"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full min-h-[46px] px-5 py-3 rounded-xl bg-[#C8102E] hover:bg-[#a50d25] text-white text-sm font-bold transition-colors"
+                >
+                  Admin ID बनाएं और सीधे लॉग इन करें
+                </button>
+              </form>
+            )}
+
+            <div className="my-5 flex items-center gap-3">
+              <div className="h-px bg-slate-200 flex-1" />
+              <span className="text-[11px] font-bold text-slate-400 uppercase">
+                या (OR)
+              </span>
+              <div className="h-px bg-slate-200 flex-1" />
+            </div>
 
             <button
               type="button"
               onClick={loginWithGoogle}
-              className="w-full min-h-[46px] px-5 py-3 rounded-xl bg-[#C8102E] hover:bg-[#a50d25] text-white text-sm font-bold transition-colors flex items-center justify-center gap-2"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-bold transition-colors flex items-center justify-center gap-2"
             >
-              <span>Sign in with Google (एडमिन लॉग इन)</span>
+              <span>Sign in with Google (गूगल अकाउंट से लॉग इन)</span>
             </button>
 
-            {currentUser && (
-              <button
-                type="button"
-                onClick={logoutUser}
-                className="w-full mt-3 min-h-[42px] px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                लॉग आउट करें
-              </button>
-            )}
-
-            <div className="mt-6 pt-5 border-t border-slate-200">
+            <div className="mt-6 pt-5 border-t border-slate-200 text-center">
               <Link
                 to="/"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900"
@@ -434,8 +653,8 @@ export function AdminPage() {
   return (
     <>
       <SEOHead
-        title="एडमिन डैशबोर्ड (CMS) — NaviBihar India (NBI News)"
-        description="NaviBihar India न्यूज़ मैनेजमेंट सिस्टम।"
+        title="एडमिन डैशबोर्ड (CMS) — NavBihar India News (NBI)"
+        description="NavBihar India News (NBI) न्यूज़ मैनेजमेंट सिस्टम।"
         canonicalPath="/admin"
       />
 
@@ -446,10 +665,10 @@ export function AdminPage() {
             <BrandLogo size="md" />
             <div>
               <h1 className="text-lg sm:text-xl font-extrabold">
-                NBI Newsroom CMS · एडमिन डैशबोर्ड
+                NBI (NavBihar India News) · एडमिन डैशबोर्ड
               </h1>
               <p className="text-xs text-slate-400">
-                लॉग-इन एडमिन: {currentUser.email}
+                लॉग-इन एडमिन: {activeAdminDisplay} · Araria, Bihar (9162432466)
               </p>
             </div>
           </div>
@@ -465,6 +684,14 @@ export function AdminPage() {
             >
               <FilePlus2 className="w-4 h-4" />
               <span>+ नई खबर लिखें</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('credentials')}
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold inline-flex items-center gap-1.5 min-h-[38px]"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span>Create ID / Password</span>
             </button>
             <Link
               to="/"
@@ -513,7 +740,8 @@ export function AdminPage() {
             { id: 'articles', label: `सभी खबरें (${totalArticlesCount})`, icon: Newspaper },
             { id: 'videos', label: `वीडियो न्यूज़ (${videos.length})`, icon: PlaySquare },
             { id: 'categories', label: `कैटेगरी (${totalCategoriesCount})`, icon: FolderKanban },
-            { id: 'settings', label: 'ब्रेकिंग न्यूज़ व सेटिंग्स', icon: Settings },
+            { id: 'credentials', label: 'Admin ID / Password बनाएं', icon: KeyRound },
+            { id: 'settings', label: 'सोशल लिंक्स व सेटिंग्स', icon: Settings },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -538,7 +766,6 @@ export function AdminPage() {
         {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
-            {/* KPI Metric Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white border border-slate-200 rounded-xl p-5">
                 <div className="text-xs font-bold text-slate-500 uppercase">
@@ -581,7 +808,7 @@ export function AdminPage() {
                   क्विक एक्शन (Quick Actions)
                 </h2>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  अंकित डेमो खबरों को एक क्लिक में Firebase Cloud डेटाबेस में स्थायी रूप से सेव करें या नई खबर प्रकाशित करें।
+                  अंकित डेमो खबरों को डेटाबेस में सेव करें, नया Admin ID/Password बनाएं या नई खबर प्रकाशित करें।
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2.5">
@@ -592,7 +819,15 @@ export function AdminPage() {
                   className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-2 min-h-[40px]"
                 >
                   <CloudUpload className="w-4 h-4" />
-                  <span>Sync Demo News to Cloud DB</span>
+                  <span>Sync Demo News</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('credentials')}
+                  className="px-4 py-2.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-900 text-xs font-bold inline-flex items-center gap-1.5 min-h-[40px]"
+                >
+                  <KeyRound className="w-4 h-4 text-[#C8102E]" />
+                  <span>Create Admin ID / Password</span>
                 </button>
                 <button
                   type="button"
@@ -634,6 +869,12 @@ export function AdminPage() {
                         <span className="font-bold text-[#C8102E]">
                           {getCategoryName(art.category)}
                         </span>
+                        {art.city && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>{art.city}</span>
+                          </>
+                        )}
                         <span aria-hidden="true">·</span>
                         <span className="font-semibold text-slate-700">
                           {art.status === 'published'
@@ -642,18 +883,6 @@ export function AdminPage() {
                               ? 'Draft'
                               : 'Scheduled'}
                         </span>
-                        {art.isFeatured && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="text-amber-700 font-bold">Featured Hero</span>
-                          </>
-                        )}
-                        {art.isBreaking && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="text-red-700 font-bold">Breaking</span>
-                          </>
-                        )}
                       </div>
                       <div className="text-sm font-bold text-slate-900 line-clamp-1">
                         {art.title}
@@ -693,7 +922,9 @@ export function AdminPage() {
           >
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <h2 className="text-xl font-extrabold text-slate-950">
-                {editingArticleId ? 'खबर संपादित करें (Edit Article)' : 'नई खबर प्रकाशित करें (Create News Article)'}
+                {editingArticleId
+                  ? 'खबर संपादित करें (Edit Article)'
+                  : 'नई खबर प्रकाशित करें (Create News Article)'}
               </h2>
               {editingArticleId && (
                 <button
@@ -717,21 +948,21 @@ export function AdminPage() {
                   maxLength={300}
                   value={artTitle}
                   onChange={(e) => setArtTitle(e.target.value)}
-                  placeholder="उदा: पटना मेट्रो कॉरिडोर पर अगले महीने से ट्रायल रन..."
+                  placeholder="उदा: अररिया और सीमांचल में नई विकास परियोजनाओं को मंजूरी..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  SEO URL Slug (अंग्रेजी शब्दों में, खाली छोड़ने पर स्वतः बनेगा)
+                  SEO URL Slug (खाली छोड़ने पर स्वतः बनेगा)
                 </label>
                 <input
                   type="text"
                   maxLength={180}
                   value={artSlug}
                   onChange={(e) => setArtSlug(e.target.value)}
-                  placeholder="patna-metro-latest-trial-update"
+                  placeholder="araria-bihar-latest-news-update"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -781,7 +1012,7 @@ export function AdminPage() {
                   maxLength={100}
                   value={artCity}
                   onChange={(e) => setArtCity(e.target.value)}
-                  placeholder="पटना / गया / मुजफ्फरपुर / नई दिल्ली"
+                  placeholder="अररिया / पटना / पूर्णिया / गया"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -820,11 +1051,11 @@ export function AdminPage() {
               <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <label className="block text-xs font-bold text-slate-800">
-                    फीचर्ड न्यूज़ इमेज (Image URL, Upload या NBI टेम्पलेट चुनें)
+                    फीचर्ड न्यूज़ इमेज (Image URL, फाइल अपलोड या NBI टेम्पलेट चुनें)
                   </label>
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold cursor-pointer">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>फाइल अपलोड करें</span>
+                    <span>फोटो अपलोड करें</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -908,7 +1139,7 @@ export function AdminPage() {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold bg-white"
                 >
                   <option value="published">Publish Immediately (तुरंत प्रकाशित करें)</option>
-                  <option value="draft">Save as Draft (ड्राफ्ट में रखें - सार्वजनिक नहीं)</option>
+                  <option value="draft">Save as Draft (ड्राफ्ट में रखें)</option>
                   <option value="scheduled">Schedule for Later (निर्धारित समय पर)</option>
                 </select>
               </div>
@@ -1029,12 +1260,6 @@ export function AdminPage() {
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatHindiDate(art.publishedAt)}</span>
-                      {art.isDemo && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-slate-400">Demo Seed</span>
-                        </>
-                      )}
                     </div>
                     <h3 className="text-base font-bold text-slate-950">
                       {art.title}
@@ -1089,7 +1314,7 @@ export function AdminPage() {
                   maxLength={300}
                   value={vidTitle}
                   onChange={(e) => setVidTitle(e.target.value)}
-                  placeholder="पटना से प्राइम बुलेटिन..."
+                  placeholder="अररिया से प्राइम बुलेटिन..."
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -1237,7 +1462,7 @@ export function AdminPage() {
                   required
                   value={catName}
                   onChange={(e) => setCatName(e.target.value)}
-                  placeholder="उदा: कृषि / स्वास्थ्य"
+                  placeholder="उदा: सीमांचल विशेष"
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -1250,7 +1475,7 @@ export function AdminPage() {
                   required
                   value={catSlug}
                   onChange={(e) => setCatSlug(e.target.value)}
-                  placeholder="agriculture"
+                  placeholder="seemanchal"
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -1331,7 +1556,106 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* TAB 6: PORTAL SETTINGS & BREAKING NEWS TICKER */}
+        {/* TAB 6: CREATE / MANAGE ADMIN ID & PASSWORD */}
+        {activeTab === 'credentials' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <form
+              onSubmit={handleCreateAdminId}
+              className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 space-y-4 self-start"
+            >
+              <h2 className="text-lg font-extrabold text-slate-950 pb-2 border-b border-slate-200">
+                नया Admin ID और Password बनाएं
+              </h2>
+              <p className="text-xs text-slate-600">
+                यहाँ से आप अपने लिए या किसी रिपोर्टर/एडिटर के लिए नया Admin ID और Password बना सकते हैं या पासवर्ड बदल सकते हैं।
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  एडमिन / एडिटर का नाम *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  placeholder="उदा: NBI Chief Editor"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Admin ID (यूजर आईडी या मोबाइल नंबर) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAdminId}
+                  onChange={(e) => setNewAdminId(e.target.value)}
+                  placeholder="उदा: nbiadmin या 9162432466"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Password (पासवर्ड) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAdminPass}
+                  onChange={(e) => setNewAdminPass(e.target.value)}
+                  placeholder="नया पासवर्ड दर्ज करें"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-[#C8102E] hover:bg-[#a50d25] text-white text-sm font-bold"
+              >
+                Admin ID / Password सेव करें
+              </button>
+            </form>
+
+            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5">
+              <h2 className="text-lg font-extrabold text-slate-950 pb-3 mb-4 border-b border-slate-200">
+                सक्रिय Admin IDs & Passwords ({adminCredentials.length})
+              </h2>
+              <div className="divide-y divide-slate-200">
+                {adminCredentials.map((cred) => (
+                  <div
+                    key={cred.id}
+                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="text-sm font-bold text-slate-950">
+                        {cred.name}
+                      </div>
+                      <div className="text-xs text-slate-600 font-mono mt-0.5">
+                        ID: <strong>{cred.adminId}</strong> · Password:{' '}
+                        <strong>{cred.password}</strong>
+                      </div>
+                    </div>
+                    {adminCredentials.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeAdminCredential(cred.id)}
+                        className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-700 hover:bg-red-50 self-start sm:self-center"
+                      >
+                        हटाएं
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: PORTAL SETTINGS & BREAKING NEWS TICKER */}
         {activeTab === 'settings' && (
           <form
             onSubmit={handleSaveSettings}
@@ -1409,17 +1733,6 @@ export function AdminPage() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Instagram URL
-                </label>
-                <input
-                  type="text"
-                  value={igUrl}
-                  onChange={(e) => setIgUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
                   YouTube URL
                 </label>
                 <input
@@ -1431,12 +1744,23 @@ export function AdminPage() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  X (Twitter) URL
+                  Instagram URL
                 </label>
                 <input
                   type="text"
-                  value={twUrl}
-                  onChange={(e) => setTwUrl(e.target.value)}
+                  value={igUrl}
+                  onChange={(e) => setIgUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  WhatsApp Channel URL
+                </label>
+                <input
+                  type="text"
+                  value={waUrl}
+                  onChange={(e) => setWaUrl(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
@@ -1453,7 +1777,7 @@ export function AdminPage() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  हेल्पलाइन फोन (Contact Phone)
+                  संपर्क नंबर (Contact No - Araria, Bihar)
                 </label>
                 <input
                   type="text"

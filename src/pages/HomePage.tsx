@@ -23,7 +23,7 @@ const BIHAR_SUB_SECTIONS: BiharSubSection[] = [
   'बिहार के प्रमुख शहरों की खबरें',
 ];
 
-const BIHAR_CITIES = ['सभी शहर', 'पटना', 'गया', 'मुजफ्फरपुर', 'भागलपुर', 'दरभंगा', 'पूर्णिया'];
+const BIHAR_CITIES = ['सभी शहर', 'अररिया', 'पटना', 'पूर्णिया', 'गया', 'मुजफ्फरपुर', 'भागलपुर', 'दरभंगा'];
 
 const HOMEPAGE_CATEGORY_SECTIONS = [
   { slug: 'india', title: 'भारत (National News)' },
@@ -191,7 +191,7 @@ export function HomePage() {
                   बिहार के प्रमुख शहर
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {['पटना', 'गया', 'मुजफ्फरपुर', 'भागलपुर', 'दरभंगा', 'पूर्णिया', 'राजगीर', 'समस्तीपुर'].map(
+                  {['अररिया', 'पटना', 'पूर्णिया', 'गया', 'मुजफ्फरपुर', 'भागलपुर', 'दरभंगा', 'समस्तीपुर'].map(
                     (city) => (
                       <Link
                         key={city}
